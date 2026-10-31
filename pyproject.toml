@@ -20,6 +20,7 @@ dependencies = [
   "tqdm>=4.66",
   "numpy>=1.24",
   "safetensors>=0.4",
+  "lunar-python>=1.4",
 ]
 
 [project.optional-dependencies]
@@ -27,6 +28,7 @@ train = ["tensorboard>=2.14"]
 dev = ["pytest>=7.4"]
 
 [project.scripts]
+shenshu = "transformer_shenshu.cli.interactive:main"
 shenshu-demo = "transformer_shenshu.cli.demo:main"
 shenshu-train = "transformer_shenshu.train.train:main"
 
