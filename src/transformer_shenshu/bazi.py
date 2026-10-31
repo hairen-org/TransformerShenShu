@@ -4,11 +4,15 @@ Date syntax:
     S2000-01-01        阳历（公历）
     C2000-01-01        中国农历
     C2023-闰02-15      农历闰月（也可写 C2023-L02-15）
+
+Clock times are Beijing time (GMT+8, standard meridian 120°E). Optional true solar time
+correction: 真太阳时 = 北京时间 + (经度 − 120°) × 4 分钟 + 均时差 (equation of time).
 """
 
 from __future__ import annotations
 
 import datetime as _dt
+import math
 import re
 from dataclasses import dataclass
 
@@ -40,6 +44,25 @@ class Birth:
 
 
 @dataclass
+class SolarTimeFix:
+    longitude: float
+    longitude_min: float  # (经度 − 120°) × 4
+    eot_min: float  # 均时差
+    clock: _dt.datetime  # 北京时间
+    true_solar: _dt.datetime
+
+    @property
+    def total_min(self) -> float:
+        return self.longitude_min + self.eot_min
+
+    def describe(self) -> str:
+        return (
+            f"{format_longitude(self.longitude)}，经度差 {self.longitude_min:+.1f} 分钟，"
+            f"均时差 {self.eot_min:+.1f} 分钟，合计 {self.total_min:+.1f} 分钟"
+        )
+
+
+@dataclass
 class Chart:
     year: str
     month: str
@@ -48,10 +71,56 @@ class Chart:
     solar: str
     lunar: str
     zodiac: str
+    fix: SolarTimeFix | None = None
 
     @property
     def pillars(self) -> str:
         return f"{self.year} {self.month} {self.day} {self.hour}"
+
+
+STANDARD_MERIDIAN = 120.0  # GMT+8
+_LON_RE = re.compile(
+    r"^\s*(东经|西经|[EeWw])?\s*([+-])?\s*(\d+(?:\.\d+)?)\s*(?:[°度]\s*(?:(\d+(?:\.\d+)?)\s*['′分]?)?)?\s*([EeWw])?\s*$"
+)
+
+
+def parse_longitude(text: str) -> float:
+    """'116.4' / '116.4E' / '东经116°24′' / '西经74' / '-74' → signed degrees (east positive)."""
+    m = _LON_RE.match(text or "")
+    if not m:
+        raise BirthError("经度写法如 116.4、116.4E、东经116°24′；西经写 西经74、74W 或 -74")
+    prefix, sign, deg, minutes, suffix = m.groups()
+    value = float(deg) + (float(minutes) / 60 if minutes else 0.0)
+    west = sign == "-" or (prefix or "").upper() in ("W", "西经") or (suffix or "").upper() == "W"
+    if minutes and float(minutes) >= 60:
+        raise BirthError("角分需小于 60")
+    if value > 180:
+        raise BirthError("经度需在 0–180 度之间（东经为正，西经为负）")
+    return -value if west else value
+
+
+def format_longitude(lon: float) -> str:
+    return f"{'东经' if lon >= 0 else '西经'} {abs(lon):.2f}°"
+
+
+def equation_of_time(t: _dt.datetime) -> float:
+    """Equation of time in minutes (NOAA approximation, ±0.5 min). t in local mean time ≈ UTC+lon."""
+    doy = t.timetuple().tm_yday
+    g = 2 * math.pi / 365 * (doy - 1 + (t.hour - 12) / 24)
+    return 229.18 * (
+        0.000075
+        + 0.001868 * math.cos(g)
+        - 0.032077 * math.sin(g)
+        - 0.014615 * math.cos(2 * g)
+        - 0.040849 * math.sin(2 * g)
+    )
+
+
+def true_solar_time(clock: _dt.datetime, longitude: float) -> SolarTimeFix:
+    lon_min = (longitude - STANDARD_MERIDIAN) * 4
+    mean_solar = clock + _dt.timedelta(minutes=lon_min)
+    eot = equation_of_time(mean_solar)
+    return SolarTimeFix(longitude, lon_min, eot, clock, mean_solar + _dt.timedelta(minutes=eot))
 
 
 def parse_birth(text: str) -> Birth:
@@ -101,22 +170,35 @@ def parse_time(text: str) -> tuple[int, int]:
     return h, mi
 
 
-def chart_from_birth(b: Birth, hour: int, minute: int) -> Chart:
-    from lunar_python import Lunar, Solar
-
+def birth_to_clock(b: Birth, hour: int, minute: int) -> _dt.datetime:
+    """Birth (阳历 / 农历) + Beijing clock time → Gregorian datetime (GMT+8)."""
     if b.calendar == "S":
-        lunar = Solar.fromYmdHms(b.year, b.month, b.day, hour, minute, 0).getLunar()
-    else:
-        lunar = Lunar.fromYmdHms(b.year, -b.month if b.leap else b.month, b.day, hour, minute, 0)
+        return _dt.datetime(b.year, b.month, b.day, hour, minute)
+    from lunar_python import Lunar
+
+    s = Lunar.fromYmdHms(b.year, -b.month if b.leap else b.month, b.day, hour, minute, 0).getSolar()
+    return _dt.datetime(s.getYear(), s.getMonth(), s.getDay(), hour, minute)
+
+
+def chart_from_birth(b: Birth, hour: int, minute: int, longitude: float | None = None) -> Chart:
+    """四柱 from Beijing time (GMT+8); with ``longitude`` the true solar time is used instead."""
+    from lunar_python import Solar
+
+    clock = birth_to_clock(b, hour, minute)
+    fix = true_solar_time(clock, longitude) if longitude is not None else None
+    t = fix.true_solar if fix else clock
+    t = (t + _dt.timedelta(seconds=30)).replace(second=0, microsecond=0)  # round to minute
+    lunar = Solar.fromYmdHms(t.year, t.month, t.day, t.hour, t.minute, 0).getLunar()
     ec = lunar.getEightChar()
     return Chart(
         year=ec.getYear(),
         month=ec.getMonth(),
         day=ec.getDay(),
         hour=ec.getTime(),
-        solar=lunar.getSolar().toYmd() + f" {hour:02d}:{minute:02d}",
+        solar=t.strftime("%Y-%m-%d %H:%M"),
         lunar=lunar.toString(),
         zodiac=lunar.getYearShengXiaoByLiChun(),
+        fix=fix,
     )
 
 

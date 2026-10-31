@@ -20,6 +20,7 @@ from transformer_shenshu.bazi import (
     BirthError,
     chart_from_birth,
     parse_birth,
+    parse_longitude,
     parse_time,
     validate_pillar,
 )
@@ -138,14 +139,19 @@ class Profile:
     qin: dict[str, int] = field(default_factory=dict)  # father/mother/spouse (1..12), brothers/sons/daughters
 
 
+TOTAL = 10
+
+
+def _step(i: int | str) -> str:
+    return f"{i}/{TOTAL}"
+
+
 def collect_profile() -> Profile:
     p = Profile()
-    p.sex = ask(
-        "1/9", "性别", ["填 男 或 女（也可写 M / F）"], optional=False, parse=parse_sex
-    )
+    p.sex = ask(_step(1), "性别", ["填 男 或 女（也可写 M / F）"], optional=False, parse=parse_sex)
 
     birth = ask(
-        "2/9",
+        _step(2),
         "出生日期",
         [
             "阳历（公历）：S + 日期，例如 S1990-05-15",
@@ -157,49 +163,71 @@ def collect_profile() -> Profile:
     )
 
     if birth == "P":
-        names = ["年柱", "月柱", "日柱", "时柱"]
         vals = []
-        for i, n in enumerate(names):
+        for i, n in enumerate(["年柱", "月柱", "日柱", "时柱"]):
             vals.append(
-                ask(
-                    f"2.{i + 1}/9",
-                    n,
-                    ["填六十甲子中的一柱，如 甲子、丙寅、癸亥"],
-                    optional=False,
-                    parse=validate_pillar,
-                )
+                ask(_step(f"2.{i + 1}"), n, ["填六十甲子中的一柱，如 甲子、丙寅、癸亥"], optional=False, parse=validate_pillar)
             )
         p.pillars = tuple(vals)
         p.chart_note = "（手动输入四柱）"
+        print(c(f"   已手动输入四柱，跳过第 3–4 步（出生时间、太阳时校准）", "2"))
     else:
         t = ask(
-            "3/9",
-            "出生时间",
+            _step(3),
+            "出生时间（北京时间 GMT+8）",
             [
-                "24 小时制，例如 10:30、23:15；或填时辰，例如 午 / 午时",
+                c("请按北京时间（GMT+8，东八区）填写", "1") + "，24 小时制，例如 10:30、23:15；或填时辰，例如 午 / 午时",
+                "在其他时区出生的，请先换算成北京时间；1986–1991 年夏令时期间（约 4–9 月）出生的，钟表时间需减 1 小时",
                 "用于排日柱、时柱；节气交界附近的出生时间也会影响年柱、月柱",
             ],
             optional=True,
             parse=parse_time,
             default_note="按午时 12:00 计。本模型的六门条号只取决于年柱、月柱和六亲，时辰不影响结果",
         )
-        hour, minute = (12, 0) if t is SKIP else t
-        chart = chart_from_birth(birth, hour, minute)
+        longitude = None
+        if t is SKIP:
+            hour, minute = 12, 0
+            print(c("   未填出生时间，跳过第 4 步（太阳时校准）", "2"))
+        else:
+            hour, minute = t
+            lon = ask(
+                _step(4),
+                "出生地经度（太阳时校准）",
+                [
+                    "填写后按真太阳时排盘：真太阳时 = 北京时间 + (经度 − 120°) × 4 分钟 + 均时差",
+                    "写法：116.4、116.4E、东经116°24′；西经写 西经74、74W 或 -74",
+                    "参考：北京 116.4　上海 121.5　广州 113.3　成都 104.1　乌鲁木齐 87.6　哈尔滨 126.6",
+                ],
+                optional=True,
+                parse=parse_longitude,
+                default_note="不校准，直接用北京时间排盘",
+            )
+            longitude = None if lon is SKIP else lon
+        chart = chart_from_birth(birth, hour, minute, longitude)
         p.pillars = (chart.year, chart.month, chart.day, chart.hour)
         print()
         print("   " + c("✓ 排盘结果", "1;32"))
-        print(f"     输入：{birth.label()}  {hour:02d}:{minute:02d}")
-        print(f"     阳历：{chart.solar}    农历：{chart.lunar}")
+        print(f"     输入：{birth.label()}  {hour:02d}:{minute:02d}（北京时间 GMT+8）")
+        if chart.fix:
+            f = chart.fix
+            print(f"     太阳时校准：{f.describe()}")
+            print(f"     北京时间 {f.clock:%Y-%m-%d %H:%M} → 真太阳时 {c(chart.solar, '1')}")
+            clock_chart = chart_from_birth(birth, hour, minute)
+            if clock_chart.pillars != chart.pillars:
+                print(c(f"     注意：校准改变了四柱（不校准时为 {clock_chart.pillars}）", "33"))
+        else:
+            print(f"     太阳时校准：未校准")
+        print(f"     排盘用时间：{chart.solar}    农历：{chart.lunar}")
         print(f"     四柱：{c(chart.pillars, '1')}    生肖（以立春为界）：{chart.zodiac}")
 
     zodiac_lines = ["可填：" + ZODIAC_HELP]
     ke_note = "将无法唯一确定真刻，结果改为列出八刻候选"
-    for step, key, title in (("4/9", "father", "父亲生肖"), ("5/9", "mother", "母亲生肖")):
-        v = ask(step, title, zodiac_lines, optional=True, parse=parse_zodiac, default_note=ke_note)
+    for step, key, title in ((5, "father", "父亲生肖"), (6, "mother", "母亲生肖")):
+        v = ask(_step(step), title, zodiac_lines, optional=True, parse=parse_zodiac, default_note=ke_note)
         if v is not SKIP:
             p.qin[key] = v
     v = ask(
-        "6/9",
+        _step(7),
         "兄弟人数",
         ["不含自己，填 0–5 的整数（模型训练范围为 0–5）"],
         optional=True,
@@ -209,7 +237,7 @@ def collect_profile() -> Profile:
     if v is not SKIP:
         p.qin["brothers"] = v
     v = ask(
-        "7/9",
+        _step(8),
         "配偶生肖",
         ["可填：" + ZODIAC_HELP, "未婚或不确定可跳过"],
         optional=True,
@@ -218,9 +246,9 @@ def collect_profile() -> Profile:
     )
     if v is not SKIP:
         p.qin["spouse"] = v
-    for step, key, title in (("8/9", "sons", "儿子人数"), ("9/9", "daughters", "女儿人数")):
+    for step, key, title in ((9, "sons", "儿子人数"), (10, "daughters", "女儿人数")):
         v = ask(
-            step,
+            _step(step),
             title,
             ["填 0–3 的整数（模型训练范围为 0–3）"],
             optional=True,
@@ -230,7 +258,6 @@ def collect_profile() -> Profile:
         if v is not SKIP:
             p.qin[key] = v
     return p
-
 
 # ---------------------------------------------------------------- model
 def resolve_checkpoint(arg: str) -> Path:

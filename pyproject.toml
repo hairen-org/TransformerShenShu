@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "transformer-shenshu"
-version = "1.0.0"
+version = "1.0.1"
 description = "铁板神数 Transformer（Tieban Shenshu）：用 Transformer 学习铁板神数起数映射（四柱+六亲 → 六门条号 → 命书）"
 readme = "README.md"
 keywords = ["铁板神数", "鐵板神數", "tieban shenshu", "bazi", "chinese metaphysics", "fortune telling", "transformer", "pytorch"]
