@@ -1,0 +1,42 @@
+model:
+  d_model: 256
+  nhead: 4
+  num_encoder_layers: 4
+  num_decoder_layers: 0
+  dim_feedforward: 512
+  dropout: 0.1
+  n_bars: 12000
+  n_sections: 6
+  use_vq: false
+  use_lm: false
+  aux_true_ke: true
+  aux_true_ke_weight: 2.0
+  codebook_size: 1024
+  code_length: 16
+  vocab_size: 8192
+  max_target_len: 512
+
+data:
+  train: "private/out/shenshu_42m_v1/train.npy"
+  val: "private/out/shenshu_42m_v1/val.npy"
+  lut_texts: "private/out/shenshu_42m_v1/lut_texts.json"
+  id_to_verse: "private/out/shenshu_42m_v1/id_to_verse.json"
+
+train:
+  batch_size: 32
+  grad_accum: 2
+  lr: 0.0003
+  weight_decay: 0.01
+  max_steps: 300000
+  warmup_steps: 2000
+  precision: fp16
+  seed: 20261030
+  log_every: 50
+  val_every: 5000
+  val_subset: 10000
+  save_every: 10000
+  early_stop_bar_acc: 0.95
+  early_stop_patience: 2
+  num_workers: 2
+  out_dir: "checkpoints/Shenshu-42M-v1"
+  artifacts: "artifacts/Shenshu-42M-v1"
