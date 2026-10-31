@@ -1,11 +1,15 @@
-# Transformer神数
+# 铁板神数 Transformer（Transformer神数）
+
+**铁板神数 · 鐵板神數 · 铁版神数 · Tieban Shenshu · Iron Plate Divine Numbers — 用深度学习复现铁板神数起数与命书**
 
 [![model](https://img.shields.io/badge/model-Shenshu--42M--v1-blue)](#3-当前架构shenshu-42m-v1)
 [![val bar-acc](https://img.shields.io/badge/val%20bar--acc-0.9987-brightgreen)](#训练结果)
 [![python](https://img.shields.io/badge/python-3.10%2B-green)](#快速开始)
 [![license](https://img.shields.io/badge/license-MIT-yellow)](LICENSE)
 
-用 Transformer 学习**铁板神数**的「起数 → 条文」映射：输入四柱与六亲，模型推出六门命书的条文号，再查条文库得到命书。
+用 Transformer 学习**铁板神数**的「起数 → 条文」映射：输入四柱八字与六亲，模型推出六门命书的条文号，再查条文库得到命书。
+
+> **English summary.** *Tieban Shenshu* (铁板神数, "Iron Plate Divine Numbers") is a traditional Chinese fortune-telling method that maps birth pillars (BaZi) and family zodiac signs to numbered verses in a ~12,000-entry book. This project trains a 21M-parameter Transformer on 42M samples to reproduce the classical number-derivation step, reaching 99.87% verse-ID accuracy on held-out year/month pillars. Weights are released as safetensors.
 
 在这个项目的视角下，铁板神数本身就是一个 **Encoder–Decoder** 系统：
 
