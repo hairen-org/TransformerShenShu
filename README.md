@@ -33,6 +33,7 @@
 7. [数据与仓库布局](#数据与仓库布局)
 8. [Contributors](#contributors)
 9. [参考文献](#参考文献)
+10. [Star](#star)
 
 ---
 
@@ -579,3 +580,23 @@ TransformerShenShu/
 ## 免责声明
 
 输出内容仅用于传统文化与机器学习研究，不构成任何现实决策建议。请遵守所在地关于命理服务与数据版权的规定；使用任何条文库前，请自行确认其许可。
+
+---
+
+## Star
+
+如果这个项目对你有帮助，欢迎点个 ⭐ 支持一下！
+
+<p align="center">
+  <a href="https://github.com/hairen-org/TransformerShenShu/stargazers">
+    <img alt="GitHub Stars" src="https://img.shields.io/github/stars/hairen-org/TransformerShenShu?style=for-the-badge&logo=github&label=Stars&color=gold">
+  </a>
+</p>
+
+<a href="https://star-history.com/#hairen-org/TransformerShenShu&Date">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=hairen-org/TransformerShenShu&type=Date&theme=dark" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=hairen-org/TransformerShenShu&type=Date" />
+    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=hairen-org/TransformerShenShu&type=Date" />
+  </picture>
+</a>
