@@ -289,30 +289,70 @@ flowchart TB
 
 ## 快速开始
 
+### 1. 安装
+
 ```bash
+git clone https://github.com/hairen-org/TransformerShenShu.git
+cd TransformerShenShu
 pip install -e .
 ```
 
-**命令行参数**
+### 2. 获取权重（GitHub Release v1.0.0）
+
+权重以 [safetensors](https://github.com/huggingface/safetensors) 格式发布在 [Releases · v1.0.0](https://github.com/hairen-org/TransformerShenShu/releases/tag/v1.0.0)。safetensors 只含张量，加载时不会执行任何代码。
+
+| 文件 | 大小 | 说明 |
+|---|---|---|
+| `shenshu-42m-v1.safetensors` | 80.5 MB | fp32 权重，模型配置写在文件元数据里 |
+| `shenshu-42m-v1-fp16.safetensors` | 40.3 MB | fp16 权重，加载时自动转回 fp32 |
+| `config.json` | — | 模型配置 + 全量验证集指标 |
+| `SHA256SUMS` | — | 校验和 |
+
+在 50 万条验证集上，fp32 和 fp16 两个版本的六门条号平均准确率都是 **0.9987**，两者共 3,000,000 个预测**完全相同**。
+
+两种获取方式任选其一：
+
+```bash
+# 方式一：让 CLI 自动下载并校验 SHA256，缓存到 ~/.cache/transformer_shenshu/
+shenshu-demo --download fp32 ...
+
+# 方式二：手动下载
+gh release download v1.0.0 -R hairen-org/TransformerShenShu -p "*.safetensors" -p SHA256SUMS
+sha256sum -c SHA256SUMS --ignore-missing
+```
+
+在 Python 中使用：
+
+```python
+from transformer_shenshu.weights import download, load_model
+
+model, info = load_model(download("fp16"))   # 或 load_model("shenshu-42m-v1.safetensors")
+```
+
+### 3. 准备条文库
+
+条文库**不随本仓库和权重发布**（版权原因）。没有条文库时，CLI 只输出六门条号；提供 `--lut` 后才会显示断语。格式可参考 [7]：`List.csv`，列为 `条文数, 吉凶断词`。
+
+### 4. 命令行参数
 
 | 参数 | 含义 |
 |---|---|
 | `--sex` | `M` 或 `F` |
 | `--year` `--month` `--day` `--hour` | 四柱干支，如 `丙寅` |
 | `--qin` | 六亲。`father` / `mother` / `spouse` 填生肖，可写中文（`猴`）或英文（`monkey`）；`brothers` / `sons` / `daughters` 填人数 |
-| `--checkpoint` | 模型权重文件 |
-| `--lut` | 条文库：`List.csv`（列为 `条文数, 吉凶断词`）或 `{条文数: 断语}` 形式的 JSON。不提供时只输出条号 |
+| `--download {fp32,fp16}` | 从 Release 下载权重（校验 SHA256）并直接使用 |
+| `--checkpoint` | 本地权重文件：`.safetensors`，或训练产出的 `.pt`（以 `weights_only=True` 安全加载） |
+| `--lut` | 条文库：`List.csv` 或 `{条文数: 断语}` 形式的 JSON。不提供时只输出条号 |
 | `--cpu` | 强制使用 CPU |
 
-权重和条文库都**不随本仓库发布**（体积和版权原因）。条文库的格式可参考 [7]。
-
-### 演示：例子 A
+### 演示：例子 A（自动下载 fp32 权重）
 
 ```console
 $ shenshu-demo --sex M --year 丙寅 --month 癸未 --day 壬戌 --hour 辛亥 \
     --qin "father=猴,mother=兔,brothers=2,spouse=马,sons=1,daughters=2" \
-    --checkpoint checkpoints/Shenshu-42M-v1/best_bar_acc.pt --lut List.csv
-loaded checkpoints/Shenshu-42M-v1/best_bar_acc.pt (step 15000)
+    --download fp32 --lut List.csv
+downloading https://github.com/hairen-org/TransformerShenShu/releases/download/v1.0.0/shenshu-42m-v1.safetensors
+loaded shenshu-42m-v1.safetensors (step 15000)
 输入: 男 · 丙寅 癸未 壬戌 辛亥 · 父猴 母兔 兄弟2 配偶马 子1 女2
 真刻(模型): 5
 ---- 命书 ----
@@ -324,13 +364,13 @@ loaded checkpoints/Shenshu-42M-v1/best_bar_acc.pt (step 15000)
 【健康】#4228  趋吉避凶，须知吉里藏凶。  (p=0.9999)
 ```
 
-### 演示：例子 B（六亲用英文生肖）
+### 演示：例子 B（本地 fp16 权重，六亲用英文生肖）
 
 ```console
 $ shenshu-demo --sex F --year 甲辰 --month 丙寅 --day 戊申 --hour 癸丑 \
     --qin "father=dragon,mother=pig,brothers=0,spouse=ox,sons=2,daughters=0" \
-    --checkpoint checkpoints/Shenshu-42M-v1/best_bar_acc.pt --lut List.csv
-loaded checkpoints/Shenshu-42M-v1/best_bar_acc.pt (step 15000)
+    --checkpoint shenshu-42m-v1-fp16.safetensors --lut List.csv
+loaded shenshu-42m-v1-fp16.safetensors (step 15000)
 输入: 女 · 甲辰 丙寅 戊申 癸丑 · 父龙 母猪 兄弟0 配偶牛 子2 女0
 真刻(模型): 4
 ---- 命书 ----
@@ -375,6 +415,7 @@ loaded checkpoints/Shenshu-42M-v1/best_bar_acc.pt (step 15000)
 | 起数规则（标签） | 1.4 节的十九法规则链 | 否（生成脚本在仓库外） |
 | 训练 / 验证集 | 由上述规则离线生成的 42M 紧凑整数表 | 否（体积大），仓库只放 1000 条样例 |
 | 处理后样例 | `data/processed/` | 是 |
+| 模型权重 | [GitHub Release v1.0.0](https://github.com/hairen-org/TransformerShenShu/releases/tag/v1.0.0)（safetensors） | 否（Release 附件） |
 
 ```
 TransformerShenShu/
@@ -384,6 +425,7 @@ TransformerShenShu/
 │   ├── model/                     # Encoder + 真刻 MLP + 6 分类头（可选 VQ / LM）
 │   ├── data/                      # Dataset & collate
 │   ├── train/                     # 训练入口 shenshu-train
+│   ├── weights.py                 # safetensors 导出 / 加载 / Release 下载
 │   └── cli/                       # 命令行演示 shenshu-demo
 ├── artifacts/                     # 曲线、对比报告
 ├── docs/                          # 架构与数据说明

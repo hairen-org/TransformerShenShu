@@ -15,6 +15,7 @@ import torch
 
 from transformer_shenshu.data.dataset import ZODIAC, parse_pillar, _idx
 from transformer_shenshu.model import ModelConfig, ShenShuModel
+from transformer_shenshu.weights import RELEASE_TAG, VARIANTS, download, load_model
 
 SECTIONS = ["总述", "父母", "婚姻", "子女", "功名财帛", "健康"]
 ZODIAC_CN = list("鼠牛虎兔龙蛇马羊猴鸡狗猪")
@@ -124,27 +125,29 @@ def main() -> None:
         default="father=rat,mother=sheep,brothers=1,spouse=rooster,sons=1,daughters=0",
         help="六亲：father/mother/spouse 生肖（rat 或 鼠），brothers/sons/daughters 人数",
     )
-    p.add_argument("--checkpoint", default="")
+    p.add_argument("--checkpoint", default="", help="权重文件：.safetensors（推荐）或训练 .pt")
+    p.add_argument(
+        "--download",
+        choices=sorted(VARIANTS),
+        help=f"从 GitHub Release {RELEASE_TAG} 下载权重（校验 SHA256）并使用",
+    )
     p.add_argument("--lut", default="", help="条文库：List.csv（条文数,吉凶断词）或 {条文数: 文本} JSON")
     p.add_argument("--cpu", action="store_true")
     args = p.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() and not args.cpu else "cpu")
-    cfg = ModelConfig()
-    model = ShenShuModel(cfg)
+    ckpt_path = str(download(args.download)) if args.download else args.checkpoint
 
-    if args.checkpoint and Path(args.checkpoint).is_file():
-        ckpt = torch.load(args.checkpoint, map_location=device, weights_only=False)
-        raw_cfg = ckpt.get("config", {})
-        cfg = ModelConfig(**{k: v for k, v in raw_cfg.items() if k in ModelConfig.__dataclass_fields__})
-        model = ShenShuModel(cfg)
-        model.load_state_dict(ckpt["model"])
-        step = ckpt.get("step")
-        print(f"loaded {args.checkpoint}" + (f" (step {step})" if step is not None else ""))
+    if ckpt_path:
+        if not Path(ckpt_path).is_file():
+            raise SystemExit(f"checkpoint not found: {ckpt_path}")
+        model, info = load_model(ckpt_path, device)
+        step = info.get("step")
+        print(f"loaded {Path(ckpt_path).name}" + (f" (step {step})" if step is not None else ""))
     else:
+        model = ShenShuModel(ModelConfig()).to(device)
         print("no checkpoint; using randomly initialized weights (smoke demo)")
 
-    model.to(device)
     batch = build_batch_from_args(args, device)
     print("输入:", describe_input(args))
 
